@@ -17,7 +17,8 @@ install:
   - wget https://github.com/rubiojr/vhd-util-convert/archive/master.tar.gz -O /tmp/vhd-util-convert.tar.gz
   - tar -xvf /tmp/vhd-util-convert.tar.gz
   - cd vhd-util-convert-master && make
-  - base64 /deV/urandom | head -c 100000 > data
+  - base64 /dev/urandom | head -c 100000 > data
+  - ls
   - qemu-img convert -fraw -Ovmdk -o subformat=streamOptimized data test.vmdk
   - qemu-img convert -fvmdk -Ovpc test.vmdk test.vhd
   - ./vhd-util-convert-master/vhd-util scan test.vhd
