@@ -18,10 +18,10 @@ install:
   - tar -xvf /tmp/vhd-util-convert.tar.gz
   - cd vhd-util-convert-master && make
   - dd if=/dev/random of=data bs=512 count=1
-  - qemu-convert -fraw -Ovmdk -o subformat=streamOptimized data test.vmdk
-  - qemu-convert -fvmdk -Ovpc test.vmdk test.vhd
+  - qemu-img convert -fraw -Ovmdk -o subformat=streamOptimized data test.vmdk
+  - qemu-img convert -fvmdk -Ovpc test.vmdk test.vhd
   - ./vhd-util-convert-master/vhd-util scan test.vhd
-  - qemu-convert -fvpc -Oraw data test.vhd test.result
+  - qemu-img convert -fvpc -Oraw data test.vhd test.result
   - diff data test.result
 script:
   - npm test
