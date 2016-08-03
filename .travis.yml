@@ -17,11 +17,12 @@ install:
   - wget https://github.com/rubiojr/vhd-util-convert/archive/master.tar.gz -O /tmp/vhd-util-convert.tar.gz
   - tar -xvf /tmp/vhd-util-convert.tar.gz
   - cd vhd-util-convert-master && make
-  - dd if=/dev/random of=data bs=512 count=1
+  - base64 /deV/urandom | head -c 100000 > data
   - qemu-img convert -fraw -Ovmdk -o subformat=streamOptimized data test.vmdk
   - qemu-img convert -fvmdk -Ovpc test.vmdk test.vhd
   - ./vhd-util-convert-master/vhd-util scan test.vhd
-  - qemu-img convert -fvpc -Oraw data test.vhd test.result
-  - diff data test.result
+  - qemu-img convert -fvpc -Oraw test.vhd test.result
+  - head -c 100000 test.result > truncated.result
+  - diff data truncated.result
 script:
   - npm test
