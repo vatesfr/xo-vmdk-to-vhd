@@ -18,12 +18,13 @@ install:
   - tar -xvf /tmp/vhd-util-convert.tar.gz
   - (cd vhd-util-convert-master && make)
   - base64 /dev/urandom | head -c 100000 > data
-  - ls
+  - ls -l
   - qemu-img convert -fraw -Ovmdk -o subformat=streamOptimized data test.vmdk
   - qemu-img convert -fvmdk -Ovpc test.vmdk test.vhd
   - ./vhd-util-convert-master/vhd-util scan test.vhd
   - qemu-img convert -fvpc -Oraw test.vhd test.result
   - head -c 100000 test.result > truncated.result
+  - ls -l
   - diff data truncated.result
 script:
   - npm test
