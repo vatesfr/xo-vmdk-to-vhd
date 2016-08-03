@@ -4,11 +4,12 @@ node_js:
 addons:
   apt:
     packages:
-    - uuid-dev
-    - build-essential
+      - uuid-dev
+      - build-essential
 install:
-    - wget https://github.com/rubiojr/vhd-util-convert/archive/master.tar.gz -O /tmp/vhd-util-convert.tar.gz
-    - tar -xvf /tmp/vhd-util-convert.tar.gz
-    - cd vhd-util-convert-master && make
+  - npm install
+  - wget https://github.com/rubiojr/vhd-util-convert/archive/master.tar.gz -O /tmp/vhd-util-convert.tar.gz
+  - tar -xvf /tmp/vhd-util-convert.tar.gz
+  - cd vhd-util-convert-master && make
 script:
-    - npm test
+  - npm test
