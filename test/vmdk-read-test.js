@@ -1,32 +1,20 @@
 'use strict'
 
-import {assert} from 'chai'
+import {expect} from 'chai'
 import {describe, it} from 'mocha'
-import {exec} from 'child-process-promise'
-import {createReadStream} from 'fs-promise'
-import {VMDKDirectParser} from '../src/vmdk-read'
+import {readGeometry} from '../src/vmdk-read'
 
 describe('VMDK reading', function () {
-  it('VMDKDirectParser reads OK', async () => {
-    let rawFileName = 'random-data'
-    let fileName = 'random-data.vmdk'
-    await exec('base64 /dev/urandom | head -c 104448 > ' + rawFileName)
-    await exec('rm -f ' + fileName + '&& VBoxManage convertfromraw --format VMDK --variant Stream ' + rawFileName + ' ' + fileName)
-    const parser = new VMDKDirectParser(createReadStream(fileName))
-    const header = await parser.readHeader()
-    let grain
-    const harvested = []
-    while (true) {
-      grain = parser.next()
-      const res = await grain
-      if (res === null) {
-        console.log('VMDK reading got null')
-        break
-      }
-      harvested.push(res)
-    }
-    assert.equal(harvested.length, 2)
-    assert.equal(harvested[0].lba, 0)
-    assert.equal(harvested[1].lba, header['grainSizeSectors'])
-  }).timeout(10000)
+  it('readGeometry() with the virtualbox file', () => {
+    return readGeometry('test.vmdk').then(result => {
+      const descriptor = result['descriptor']
+      expect(descriptor['createType']).to.equal('streamOptimized')
+      expect(descriptor['parentCID']).to.equal('ffffffff')
+      expect(descriptor['ddb.adapterType']).to.equal('ide')
+      expect(descriptor['createType']).to.equal('streamOptimized')
+      expect(descriptor['ddb.geometry.cylinders']).to.equal('8')
+      expect(descriptor['ddb.geometry.heads']).to.equal('16')
+      expect(descriptor['ddb.geometry.sectors']).to.equal('63')
+    })
+  })
 })
