@@ -15,10 +15,11 @@
   },
   "scripts": {
     "build": "babel src -d lib",
-    "test": "npm run lint && npm run build && mocha --compilers js:babel-core/register --reporter spec",
+    "test": "npm run lint && npm run build && mocha --compilers js:babel-core/register --reporter spec --require babel-polyfill",
     "lint": "standard"
   },
   "devDependencies": {
+    "babel-polyfill": "^6.9.1",
     "babel-cli": "^6.0.0",
     "babel-core": "^6.3.17",
     "babel-eslint": "^6.1.2",
@@ -29,7 +30,9 @@
     "mocha": "^3.0.0",
     "standard": "^7.0.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "fs-promise": "^0.4.1"
+  },
   "babel": {
     "presets": [
       "stage-0",
