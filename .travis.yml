@@ -17,13 +17,5 @@ install:
   - wget https://github.com/rubiojr/vhd-util-convert/archive/master.tar.gz -O /tmp/vhd-util-convert.tar.gz
   - tar -xvf /tmp/vhd-util-convert.tar.gz
   - (cd vhd-util-convert-master && make)
-  - base64 /dev/urandom | head -c 104448 > random-data
-  - ls -l
-  - qemu-img convert -fraw -Ovmdk -o subformat=streamOptimized random-data random-data.vmdk
-  - qemu-img convert -fvmdk -Ovpc random-data.vmdk random-data.vhd
-  - qemu-img convert -fvpc -Oraw random-data.vhd random-data.result
-  - head -c 104448 random-data.result > random-data-truncated.result
-  - ls -l
-  - diff random-data random-data-truncated.result
 script:
   - npm test

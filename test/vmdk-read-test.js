@@ -2,19 +2,24 @@
 
 import {expect} from 'chai'
 import {describe, it} from 'mocha'
-import {readGeometry} from '../src/vmdk-read'
+import {exec} from 'child-process-promise'
+import {readFile} from 'fs-promise'
+import {readRawContent} from '../src/vmdk-read'
 
 describe('VMDK reading', function () {
-  it('readGeometry() with the virtualbox file', () => {
-    return readGeometry('test.vmdk').then(result => {
-      const descriptor = result['descriptor']
-      expect(descriptor['createType']).to.equal('streamOptimized')
-      expect(descriptor['parentCID']).to.equal('ffffffff')
-      expect(descriptor['ddb.adapterType']).to.equal('ide')
-      expect(descriptor['createType']).to.equal('streamOptimized')
-      expect(descriptor['ddb.geometry.cylinders']).to.equal('8')
-      expect(descriptor['ddb.geometry.heads']).to.equal('16')
-      expect(descriptor['ddb.geometry.sectors']).to.equal('63')
-    })
+  it('readRawContent() can retrieve a random data file', () => {
+    let rawFileName = 'random-data'
+    let fileName = 'random-data.vmdk'
+    return exec('base64 /dev/urandom | head -c 104448 > ' + rawFileName)
+      .then(() => {
+        return exec('qemu-img convert -fraw -Ovmdk  -o subformat=streamOptimized ' + rawFileName + ' ' + fileName)
+      })
+      .then(() => {
+        return Promise.all([readFile(rawFileName), readRawContent(fileName)])
+      })
+      .then((result) => {
+        expect(result[1]['descriptor']['createType']).to.equal('streamOptimized')
+        expect(result[1]['rawFile'].toString('ascii')).to.equal(result[0].toString('ascii'))
+      })
   })
 })
