@@ -1,4 +1,5 @@
 'use strict'
+import {open, write} from 'fs-promise'
 
 const footerCookie = 'conectix'
 const creatorApp = 'xo  '
@@ -6,6 +7,8 @@ const creatorApp = 'xo  '
 const osString = 'Wi2k'
 const headerCookie = 'cxsparse'
 const dynamicHardDiskType = 3
+
+const sectorSize = 512
 
 export function computeChecksum (buffer) {
   let sum = 0
@@ -37,12 +40,12 @@ export function createFooter (size, timestamp, geometry) {
   footer.writeUInt8(geometry['sectorsPerTrack'], 59)
   footer.writeUInt32BE(dynamicHardDiskType, 60)
   let checksum = computeChecksum(footer)
-  console.log('checksum', checksum)
   footer.writeUInt32BE(checksum, 64)
+  return footer
 }
 
 export function createDynamicDiskHeader (tableEntries) {
-  let view = new Uint8Array(512)
+  let view = new Uint8Array(1024)
   let header = new Buffer(view.buffer)
   view.set(new Buffer(headerCookie, 'ascii'), 0)
   // hard code no next data
@@ -56,6 +59,25 @@ export function createDynamicDiskHeader (tableEntries) {
   // hard code 2MB block size
   header.writeUInt32BE(0x00200000, 32)
   let checksum = computeChecksum(header)
-  console.log('checksum', checksum)
   header.writeUInt32BE(checksum, 36)
+  return header
+}
+
+export function createEmptyTable (dataSize, blockSize, writeStream) {
+  const blockCount = Math.ceil(dataSize / blockSize)
+  const tableSizeSectors = Math.ceil(blockCount * 4 / sectorSize)
+  const bufferOrArrayOrLength = tableSizeSectors * sectorSize / 4
+  const buffer = new Uint32Array(bufferOrArrayOrLength)
+  buffer.fill(0xffffffff)
+  return {entries: blockCount, buffer: new Buffer(buffer.buffer)}
+}
+export async function createEmptyFile (fileName, dataSize, timestamp, geometry) {
+  const fileFooter = createFooter(dataSize, timestamp, geometry)
+  const table = createEmptyTable(dataSize, 0x00200000)
+  const diskHeader = createDynamicDiskHeader(table.entries)
+  const file = await open(fileName, 'w')
+  await write(file, fileFooter, 0, fileFooter.length)
+  await write(file, diskHeader, 0, diskHeader.length)
+  await write(file, table.buffer, 0, table.buffer.length)
+  await write(file, fileFooter, 0, fileFooter.length)
 }

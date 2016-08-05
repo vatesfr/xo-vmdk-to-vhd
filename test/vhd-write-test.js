@@ -1,8 +1,10 @@
 'use strict'
 
-import {expect} from 'chai'
+import {expect, assert} from 'chai'
 import {describe, it} from 'mocha'
-import {createFooter, createDynamicDiskHeader, computeChecksum} from '../src/vhd-write'
+import {readFile} from 'fs-promise'
+import {exec} from 'child-process-promise'
+import {createFooter, createDynamicDiskHeader, computeChecksum, createEmptyFile} from '../src/vhd-write'
 
 describe('VHD writing', function () {
   it('computeChecksum() can is correct against some reference values', () => {
@@ -21,5 +23,25 @@ describe('VHD writing', function () {
   it('createDynamicDiskHeader() does not crash', () => {
     createDynamicDiskHeader(1)
     expect('a').to.equal('a')
+  })
+  it('createEmptyFile() does not crash', () => {
+    const fileName = 'output.vhd'
+    const rawFilename = 'output.raw'
+    const dataSize = 104448
+    return createEmptyFile(fileName, dataSize, 523557791, {cylinders: 3, heads: 4, sectorsPerTrack: 17})
+      .then(() => {
+        return exec('qemu-img convert -fvpc -Oraw ' + fileName + ' ' + rawFilename)
+      })
+      .then(() => {
+        return readFile(rawFilename)
+      })
+      .then((fileContent) => {
+        expect(fileContent.length).to.equal(dataSize)
+        for (let i = 0; i < fileContent.length; i++) {
+          if (fileContent[i] !== 0) {
+            assert.fail(fileContent[i], 0)
+          }
+        }
+      })
   })
 })
