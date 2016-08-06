@@ -63,21 +63,24 @@ export function createDynamicDiskHeader (tableEntries) {
   return header
 }
 
-export function createEmptyTable (dataSize, blockSize, writeStream) {
+export function createEmptyTable (dataSize, blockSize) {
   const blockCount = Math.ceil(dataSize / blockSize)
   const tableSizeSectors = Math.ceil(blockCount * 4 / sectorSize)
   const bufferOrArrayOrLength = tableSizeSectors * sectorSize / 4
   const buffer = new Uint32Array(bufferOrArrayOrLength)
   buffer.fill(0xffffffff)
-  return {entries: blockCount, buffer: new Buffer(buffer.buffer)}
+  return {entryCount: blockCount, entries: buffer}
 }
+
 export async function createEmptyFile (fileName, dataSize, timestamp, geometry) {
   const fileFooter = createFooter(dataSize, timestamp, geometry)
   const table = createEmptyTable(dataSize, 0x00200000)
-  const diskHeader = createDynamicDiskHeader(table.entries)
+  const tableBuffer = new Buffer(table.entries.buffer)
+  const diskHeader = createDynamicDiskHeader(table.entryCount)
   const file = await open(fileName, 'w')
   await write(file, fileFooter, 0, fileFooter.length)
   await write(file, diskHeader, 0, diskHeader.length)
-  await write(file, table.buffer, 0, table.buffer.length)
+  await write(file, tableBuffer, 0, tableBuffer.length)
   await write(file, fileFooter, 0, fileFooter.length)
 }
+
