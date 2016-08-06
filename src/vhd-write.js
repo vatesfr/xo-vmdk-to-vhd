@@ -19,6 +19,43 @@ export function computeChecksum (buffer) {
   return (~sum) >>> 0
 }
 
+export function computeGeometryForSize (size) {
+  let totalSectors = Math.ceil(size / 512)
+  console.log('totalSectors', totalSectors)
+  let sectorsPerTrack
+  let heads
+  let cylinderTimesHeads
+  if (totalSectors > 65535 * 16 * 255) {
+    throw Error('disk is too big')
+  }
+  // straight copypasta from the file spec appendix on CHS Calculation
+  if (totalSectors >= 65535 * 16 * 63) {
+    sectorsPerTrack = 255
+    heads = 16
+    cylinderTimesHeads = totalSectors / sectorsPerTrack
+  } else {
+    sectorsPerTrack = 17
+    cylinderTimesHeads = totalSectors / sectorsPerTrack
+    heads = Math.floor((cylinderTimesHeads + 1023) / 1024)
+    if (heads < 4) {
+      heads = 4
+    }
+    if (cylinderTimesHeads >= (heads * 1024) || heads > 16) {
+      sectorsPerTrack = 31
+      heads = 16
+      cylinderTimesHeads = totalSectors / sectorsPerTrack
+    }
+    if (cylinderTimesHeads >= (heads * 1024)) {
+      sectorsPerTrack = 63
+      heads = 16
+      cylinderTimesHeads = totalSectors / sectorsPerTrack
+    }
+  }
+  let cylinders = Math.floor(cylinderTimesHeads / heads)
+  let actualSize = cylinders * heads * sectorsPerTrack * sectorSize
+  return {cylinders, heads, sectorsPerTrack, actualSize}
+}
+
 export function createFooter (size, timestamp, geometry) {
   let view = new Uint8Array(512)
   let footer = new Buffer(view.buffer)
@@ -44,7 +81,7 @@ export function createFooter (size, timestamp, geometry) {
   return footer
 }
 
-export function createDynamicDiskHeader (tableEntries) {
+export function createDynamicDiskHeader (tableEntries, blockSize) {
   let view = new Uint8Array(1024)
   let header = new Buffer(view.buffer)
   view.set(new Buffer(headerCookie, 'ascii'), 0)
@@ -53,11 +90,10 @@ export function createDynamicDiskHeader (tableEntries) {
   header.writeUInt32BE(0xFFFFFFFF, 12)
   // hard code table offset
   header.writeUInt32BE(0, 16)
-  header.writeUInt32BE(512 * 3, 20)
+  header.writeUInt32BE(sectorSize * 3, 20)
   header.writeUInt32BE(0x00010000, 24)
   header.writeUInt32BE(tableEntries, 28)
-  // hard code 2MB block size
-  header.writeUInt32BE(0x00200000, 32)
+  header.writeUInt32BE(blockSize, 32)
   let checksum = computeChecksum(header)
   header.writeUInt32BE(checksum, 36)
   return header
@@ -66,21 +102,45 @@ export function createDynamicDiskHeader (tableEntries) {
 export function createEmptyTable (dataSize, blockSize) {
   const blockCount = Math.ceil(dataSize / blockSize)
   const tableSizeSectors = Math.ceil(blockCount * 4 / sectorSize)
-  const bufferOrArrayOrLength = tableSizeSectors * sectorSize / 4
-  const buffer = new Uint32Array(bufferOrArrayOrLength)
-  buffer.fill(0xffffffff)
-  return {entryCount: blockCount, entries: buffer}
+  const bufferSize = tableSizeSectors * sectorSize
+  const buffer = new Buffer(bufferSize)
+  buffer.fill(0xff)
+  return {entryCount: blockCount, buffer: buffer}
 }
 
-export async function createEmptyFile (fileName, dataSize, timestamp, geometry) {
+function createBlock (blockSize) {
+  const bitmapSize = blockSize / sectorSize / 8
+  const bufferSize = Math.ceil((blockSize + bitmapSize) / sectorSize) * sectorSize
+  const buffer = new Buffer(bufferSize)
+  buffer.fill(0)
+  const bitmapBuffer = buffer.slice(0, bitmapSize)
+  bitmapBuffer.fill(0xff)
+  return buffer
+}
+
+export async function createExpandedEmptyFile (fileName, dataSize, timestamp, geometry) {
   const fileFooter = createFooter(dataSize, timestamp, geometry)
-  const table = createEmptyTable(dataSize, 0x00200000)
-  const tableBuffer = new Buffer(table.entries.buffer)
-  const diskHeader = createDynamicDiskHeader(table.entryCount)
+  const blockSize = 0x00200000
+  const table = createEmptyTable(dataSize, blockSize)
+  const tableBuffer = table.buffer
+  const diskHeader = createDynamicDiskHeader(table.entryCount, 0x00200000)
+  let currentPosition = (sectorSize * 3 + tableBuffer.length) / sectorSize
+  console.log('currentPosition', currentPosition)
+  const blockCount = Math.ceil(dataSize / blockSize)
+  console.log(blockCount)
+  const blocks = []
+  for (let i = 0; i < blockCount; i++) {
+    const block = createBlock(blockSize)
+    blocks.push(block)
+    table.buffer.writeUInt32BE(currentPosition, i * 4)
+    currentPosition += block.length / sectorSize
+  }
   const file = await open(fileName, 'w')
   await write(file, fileFooter, 0, fileFooter.length)
   await write(file, diskHeader, 0, diskHeader.length)
   await write(file, tableBuffer, 0, tableBuffer.length)
+  for (let i = 0; i < blocks.length; i++) {
+    await write(file, blocks[i], 0, blocks[i].length)
+  }
   await write(file, fileFooter, 0, fileFooter.length)
 }
-
