@@ -22,4 +22,4 @@ install:
   - echo "$TRAVIS_BUILD_DIR"
 script:
   - npm test
-  - find $TRAVIS_BUILD_DIR -name '*.vhd' -exec ./vhd-util-convert-master/vhd-util scan -v {} \;
+  - find $TRAVIS_BUILD_DIR -name '*.vhd' -print0 | xargs -n 1 -0 ./vhd-util-convert-master/vhd-util scan -v
