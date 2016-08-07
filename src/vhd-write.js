@@ -117,12 +117,13 @@ function createBlock (blockSize, buffer) {
   const bitmapBuffer = blockBuffer.slice(0, bitmapSize)
   bitmapBuffer.fill(0xff)
   if (buffer !== null) {
+    console.log(typeof buffer, typeof buffer.copy, buffer)
     buffer.copy(blockBuffer, bitmapSize)
   }
   return blockBuffer
 }
 
-export async function createExpandedEmptyFile (fileName, dataBuffer, timestamp, geometry) {
+export async function createExpandedFile (fileName, dataBuffer, timestamp, geometry) {
   const dataSize = dataBuffer.length
   const fileFooter = createFooter(dataSize, timestamp, geometry)
   const blockSize = 0x00200000

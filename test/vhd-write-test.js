@@ -8,7 +8,7 @@ import {
   createFooter,
   createDynamicDiskHeader,
   computeChecksum,
-  createExpandedEmptyFile,
+  createExpandedFile,
   computeGeometryForSize
 } from '../src/vhd-write'
 
@@ -43,7 +43,7 @@ describe('VHD writing', function () {
         return readFile(randomFileName)
       })
       .then((buffer) => {
-        return createExpandedEmptyFile(fileName, buffer, 523557791, geometry)
+        return createExpandedFile(fileName, buffer, 523557791, geometry)
           .then(() => {
             return exec('qemu-img convert -fvpc -Oraw ' + fileName + ' ' + rawFilename)
           })
