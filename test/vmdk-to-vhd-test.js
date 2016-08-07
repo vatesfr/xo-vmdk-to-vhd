@@ -28,7 +28,7 @@ describe('VMDK to VHD conversion', function () {
             return exec('qemu-img convert -fvpc -Oraw ' + vhdFileName + ' ' + reconvertedRawFilemane)
           })
           .then(() => {
-            return exec('qemu-img compare ' + inputRawFileName + ' ' + vhdFileName)
+            return exec('qemu-img compare ' + vmdkFileName + ' ' + vhdFileName)
           })
       })
   })
