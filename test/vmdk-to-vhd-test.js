@@ -1,5 +1,6 @@
 'use strict'
 
+import {assert} from 'chai'
 import {describe, it} from 'mocha'
 import {exec} from 'child-process-promise'
 import {readFile} from 'fs-promise'
@@ -29,6 +30,11 @@ describe('VMDK to VHD conversion', function () {
           })
           .then(() => {
             return exec('qemu-img compare ' + vmdkFileName + ' ' + vhdFileName)
+              .catch((error) => {
+                console.error(error.stdout)
+                console.error(error.stderr)
+                assert.fail(vhdFileName, vmdkFileName, error.message)
+              })
           })
       })
   })
