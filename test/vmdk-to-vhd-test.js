@@ -1,6 +1,5 @@
 'use strict'
 
-import {expect, assert} from 'chai'
 import {describe, it} from 'mocha'
 import {exec} from 'child-process-promise'
 import {readFile} from 'fs-promise'
@@ -9,36 +8,27 @@ import {createExpandedFile, computeGeometryForSize} from '../src/vhd-write'
 
 describe('VMDK to VHD conversion', function () {
   it('can convert a random data file', () => {
-    let rawFileName = 'random-data.raw'
-    let fileName = 'random-data.vmdk'
-    let outputFilename = 'from-vmdk.vhd'
+    let inputRawFileName = 'random-data.raw'
+    let vmdkFileName = 'random-data.vmdk'
+    let vhdFileName = 'from-vmdk.vhd'
     let reconvertedRawFilemane = 'from-vhd.raw'
     let dataSize = 5222400
-    return exec('base64 /dev/urandom | head -c ' + dataSize + ' > ' + rawFileName)
+    return exec('base64 /dev/urandom | head -c ' + dataSize + ' > ' + inputRawFileName)
       .then(() => {
-        return exec('qemu-img convert -fraw -Ovmdk  -o subformat=streamOptimized ' + rawFileName + ' ' + fileName)
+        return exec('qemu-img convert -fraw -Ovmdk  -o subformat=streamOptimized ' + inputRawFileName + ' ' + vmdkFileName)
       })
       .then(() => {
-        return Promise.all([readRawContent(fileName), readFile(rawFileName)])
+        return Promise.all([readRawContent(vmdkFileName), readFile(inputRawFileName)])
       })
       .then((result) => {
         const readRawContent = result[0].rawFile
-        const originalRawContent = result[1]
         const geometry = computeGeometryForSize(readRawContent.length)
-        return createExpandedFile(outputFilename, readRawContent, 523557791, geometry)
+        return createExpandedFile(vhdFileName, readRawContent, 523557791, geometry)
           .then(() => {
-            return exec('qemu-img convert -fvpc -Oraw ' + outputFilename + ' ' + reconvertedRawFilemane)
+            return exec('qemu-img convert -fvpc -Oraw ' + vhdFileName + ' ' + reconvertedRawFilemane)
           })
           .then(() => {
-            return readFile(reconvertedRawFilemane)
-          })
-          .then((fileContent) => {
-            expect(fileContent.length).to.equal(originalRawContent.length)
-            for (let i = 0; i < fileContent.length; i++) {
-              if (fileContent[i] !== originalRawContent[i]) {
-                assert.fail(fileContent[i], originalRawContent[i])
-              }
-            }
+            return exec('qemu-img compare ' + inputRawFileName + ' ' + vhdFileName)
           })
       })
   })
