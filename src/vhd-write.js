@@ -67,10 +67,12 @@ export function createFooter (size, timestamp, geometry) {
   footer.writeUInt32BE(timestamp, 24)
   view.set(new Buffer(creatorApp, 'ascii'), 28)
   view.set(new Buffer(osString, 'ascii'), 36)
-  footer.writeUInt32BE(size >> 32, 40)
-  footer.writeUInt32BE(size, 44)
-  footer.writeUInt32BE(size >> 32, 48)
-  footer.writeUInt32BE(size, 52)
+  const sizeHigh = Math.floor(size / Math.pow(2, 32)) & 0xFFFFFFFF
+  const sizeLow = size & 0xFFFFFFFF
+  footer.writeUInt32BE(sizeHigh, 40)
+  footer.writeUInt32BE(sizeLow, 44)
+  footer.writeUInt32BE(sizeHigh, 48)
+  footer.writeUInt32BE(sizeLow, 52)
   footer.writeUInt16BE(geometry['cylinders'], 56)
   footer.writeUInt8(geometry['heads'], 58)
   footer.writeUInt8(geometry['sectorsPerTrack'], 59)

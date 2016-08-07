@@ -19,3 +19,4 @@ install:
   - (cd vhd-util-convert-master && make)
 script:
   - npm test
+  - find xo-vmdk-to-vhd -name '*.vhd' -exec ./vhd-util-convert-master/vhd-util scan -v {} \;
