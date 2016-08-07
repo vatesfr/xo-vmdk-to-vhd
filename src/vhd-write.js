@@ -21,7 +21,6 @@ export function computeChecksum (buffer) {
 
 export function computeGeometryForSize (size) {
   let totalSectors = Math.ceil(size / 512)
-  console.log('totalSectors', totalSectors)
   let sectorsPerTrack
   let heads
   let cylinderTimesHeads
@@ -108,29 +107,31 @@ export function createEmptyTable (dataSize, blockSize) {
   return {entryCount: blockCount, buffer: buffer}
 }
 
-function createBlock (blockSize) {
+function createBlock (blockSize, buffer) {
   const bitmapSize = blockSize / sectorSize / 8
   const bufferSize = Math.ceil((blockSize + bitmapSize) / sectorSize) * sectorSize
-  const buffer = new Buffer(bufferSize)
-  buffer.fill(0)
-  const bitmapBuffer = buffer.slice(0, bitmapSize)
+  const blockBuffer = new Buffer(bufferSize)
+  blockBuffer.fill(0)
+  const bitmapBuffer = blockBuffer.slice(0, bitmapSize)
   bitmapBuffer.fill(0xff)
-  return buffer
+  if (buffer !== null) {
+    buffer.copy(blockBuffer, bitmapSize)
+  }
+  return blockBuffer
 }
 
-export async function createExpandedEmptyFile (fileName, dataSize, timestamp, geometry) {
+export async function createExpandedEmptyFile (fileName, dataBuffer, timestamp, geometry) {
+  const dataSize = dataBuffer.length
   const fileFooter = createFooter(dataSize, timestamp, geometry)
   const blockSize = 0x00200000
   const table = createEmptyTable(dataSize, blockSize)
   const tableBuffer = table.buffer
   const diskHeader = createDynamicDiskHeader(table.entryCount, 0x00200000)
   let currentPosition = (sectorSize * 3 + tableBuffer.length) / sectorSize
-  console.log('currentPosition', currentPosition)
   const blockCount = Math.ceil(dataSize / blockSize)
-  console.log(blockCount)
   const blocks = []
   for (let i = 0; i < blockCount; i++) {
-    const block = createBlock(blockSize)
+    const block = createBlock(blockSize, dataBuffer.slice(i * blockSize, (i + 1) * blockSize))
     blocks.push(block)
     table.buffer.writeUInt32BE(currentPosition, i * 4)
     currentPosition += block.length / sectorSize
