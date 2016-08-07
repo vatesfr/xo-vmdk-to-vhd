@@ -117,7 +117,6 @@ function createBlock (blockSize, buffer) {
   const bitmapBuffer = blockBuffer.slice(0, bitmapSize)
   bitmapBuffer.fill(0xff)
   if (buffer !== null) {
-    console.log(typeof buffer, typeof buffer.copy, buffer)
     buffer.copy(blockBuffer, bitmapSize)
   }
   return blockBuffer

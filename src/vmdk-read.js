@@ -51,8 +51,6 @@ function parseDescriptor (descriptorSlice) {
       })
     }
   }
-  console.log(descriptorDict)
-  console.log(extentList)
   return {descriptor: descriptorDict, extents: extentList}
 }
 
@@ -78,17 +76,10 @@ function parseHeader (buffer) {
   const overHeadSectors = parseS64b(buffer, 64, 'overHeadSectors')
   const compressionMethod = compressionMap[buffer.readUInt16LE(77)]
   const l1EntrySectors = numGTEsPerGT * grainSizeSectors
-  console.log('flags', flags)
-  console.log('capacitySectors', capacitySectors, ' -> ', capacitySectors * sectorSize, 'b')
-  console.log('grainSizeSectors', grainSizeSectors, ' -> ', grainSizeSectors * sectorSize, 'b')
-  console.log('descriptorOffsetSectors', descriptorOffsetSectors)
-  console.log('descriptorSizeSectors', descriptorSizeSectors)
-  console.log('numGTEsPerGT', numGTEsPerGT)
-  console.log('grainDirectoryOffsetSectors', grainDirectoryOffsetSectors, ' -> ', grainDirectoryOffsetSectors * sectorSize, 'b')
-  console.log('overHeadSectors', overHeadSectors, ' -> ', overHeadSectors * sectorSize, 'b')
-  console.log('compressionMethod', compressionMethod)
-  console.log('l1EntrySectors', l1EntrySectors)
   return {
+    flags,
+    compressionMethod,
+    overHeadSectors,
     capacitySectors,
     descriptorOffsetSectors,
     descriptorSizeSectors,
@@ -97,11 +88,11 @@ function parseHeader (buffer) {
     numGTEsPerGT
   }
 }
-async function readGrain (offsetSectors, buffer) {
+async function readGrain (offsetSectors, buffer, compressed) {
   const offset = offsetSectors * sectorSize
   const size = buffer.readUInt32LE(offset + 8)
   const grainBuffer = buffer.slice(offset + 12, offset + 12 + size)
-  const grainContent = await zlib.inflateSync(grainBuffer)
+  const grainContent = compressed ? await zlib.inflateSync(grainBuffer) : grainBuffer
   return {
     offsetSectors: offsetSectors,
     offset,
@@ -130,14 +121,12 @@ export async function readRawContent (fileName) {
   const descriptor = parseDescriptor(descriptorBuffer)
 
   if (header.grainDirectoryOffsetSectors === -1) {
-    console.log('--- lets parse the footer ----')
     header = parseHeader(buffer.slice(-1024, -1024 + sectorSize))
   }
   const rawOutputBuffer = new Buffer(header.capacitySectors * sectorSize)
   rawOutputBuffer.fill(0)
   const l1Size = Math.floor((header.capacitySectors + header.l1EntrySectors - 1) / header.l1EntrySectors)
   const l2Size = header.numGTEsPerGT
-  console.log('l1Size', l1Size, 'l2Size', l2Size)
   const l1 = []
   for (let i = 0; i < l1Size; i++) {
     const l1Entry = buffer.readUInt32LE(header.grainDirectoryOffsetSectors * sectorSize + 4 * i)
@@ -147,17 +136,15 @@ export async function readRawContent (fileName) {
       for (let j = 0; j < l2Size; j++) {
         const l2Entry = buffer.readUInt32LE(l1Entry * sectorSize + 4 * j)
         if (l2Entry !== 0) {
-          const grain = await readGrain(l2Entry, buffer)
+          const grain = await readGrain(l2Entry, buffer, header['flags']['compressedGrains'])
           for (let k = 0; k < grain.grain.byteLength; k++) {
             rawOutputBuffer[grain.lba * sectorSize + k] = grain.grain[k]
           }
           l2[j] = grain
         }
       }
-      console.log('-- l1 entry ', l1Entry, l2)
     }
   }
-  console.log('-- l1', l1)
   const vmdkType = descriptor['descriptor']['createType']
   if (!vmdkType || vmdkType.toLowerCase() !== 'streamOptimized'.toLowerCase()) {
     throw new Error('unsupported VMDK type "' + vmdkType + '", only streamOptimized is supported')
