@@ -33,24 +33,31 @@ describe('VHD writing', function () {
   it('createEmptyFile() does not crash', () => {
     const fileName = 'output.vhd'
     const rawFilename = 'output.raw'
+    const randomFileName = 'random.raw'
     const geometry = computeGeometryForSize(1024 * 1024 * 8)
     const dataSize = geometry.actualSize
-    return createExpandedEmptyFile(fileName, dataSize, 523557791, geometry)
+    const buffer = new Buffer(dataSize)
+    buffer.fill(7)
+    return exec('base64 /dev/urandom | head -c ' + dataSize + ' > ' + randomFileName)
       .then(() => {
-        return exec('qemu-img convert -fvpc -Oraw ' + fileName + ' ' + rawFilename)
+        return readFile(randomFileName)
       })
-      .then(() => {
-        return readFile(rawFilename)
-      })
-      .then((fileContent) => {
-        console.log('dataSize', dataSize)
-        console.log('fileContent.length', fileContent.length)
-        expect(fileContent.length).to.equal(dataSize)
-        for (let i = 0; i < fileContent.length; i++) {
-          if (fileContent[i] !== 0) {
-            assert.fail(fileContent[i], 0)
-          }
-        }
+      .then((buffer) => {
+        return createExpandedEmptyFile(fileName, buffer, 523557791, geometry)
+          .then(() => {
+            return exec('qemu-img convert -fvpc -Oraw ' + fileName + ' ' + rawFilename)
+          })
+          .then(() => {
+            return readFile(rawFilename)
+          })
+          .then((fileContent) => {
+            expect(fileContent.length).to.equal(dataSize)
+            for (let i = 0; i < fileContent.length; i++) {
+              if (fileContent[i] !== buffer[i]) {
+                assert.fail(fileContent[i], 0)
+              }
+            }
+          })
       })
   })
 })
