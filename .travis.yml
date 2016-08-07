@@ -17,6 +17,9 @@ install:
   - wget https://github.com/rubiojr/vhd-util-convert/archive/master.tar.gz -O /tmp/vhd-util-convert.tar.gz
   - tar -xvf /tmp/vhd-util-convert.tar.gz
   - (cd vhd-util-convert-master && make)
+  - df
+  - pwd
+  - echo "$TRAVIS_BUILD_DIR"
 script:
   - npm test
   - find $TRAVIS_BUILD_DIR -name '*.vhd' -exec ./vhd-util-convert-master/vhd-util scan -v {} \;
