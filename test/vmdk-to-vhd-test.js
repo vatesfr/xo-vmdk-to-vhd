@@ -24,9 +24,7 @@ describe('VMDK to VHD conversion', function () {
       .then((result) => {
         const readRawContent = result[0].rawFile
         const originalRawContent = result[1]
-        console.log('NEW file', readRawContent)
         const geometry = computeGeometryForSize(readRawContent.length)
-        console.log('NEW GEOMETRY', geometry)
         return createExpandedFile(outputFilename, readRawContent, 523557791, geometry)
           .then(() => {
             return exec('qemu-img convert -fvpc -Oraw ' + outputFilename + ' ' + reconvertedRawFilemane)
