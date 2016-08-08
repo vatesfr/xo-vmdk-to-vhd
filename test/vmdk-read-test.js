@@ -3,7 +3,7 @@
 import {expect} from 'chai'
 import {describe, it} from 'mocha'
 import {exec} from 'child-process-promise'
-import {readFile} from 'fs-promise'
+import {readFile, createReadStream} from 'fs-promise'
 import {readRawContent} from '../src/vmdk-read'
 
 describe('VMDK reading', function () {
@@ -15,7 +15,7 @@ describe('VMDK reading', function () {
         return exec('qemu-img convert -fraw -Ovmdk  -o subformat=streamOptimized ' + rawFileName + ' ' + fileName)
       })
       .then(() => {
-        return Promise.all([readFile(rawFileName), readRawContent(fileName)])
+        return Promise.all([readFile(rawFileName), readRawContent(createReadStream(fileName))])
       })
       .then((result) => {
         expect(result[1]['descriptor']['createType']).to.equal('streamOptimized')

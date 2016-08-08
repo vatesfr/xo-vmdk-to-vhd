@@ -8,7 +8,6 @@ export class VirtualBuffer {
     this.position = 0
     this.finished = false
     this.readStream.on('data', (buffer) => {
-      // TODO: not concatenating but keeping a nice list of buffers
       this.buffer = Buffer.concat([this.buffer, buffer])
       this._tryToFlushPromises()
       this.size += buffer.length
@@ -20,16 +19,13 @@ export class VirtualBuffer {
     this.waitingPromises = []
   }
 
-  get isDepleted () {
-    return this.finished && this.position === this.size
-  }
-
   _tryToFlushPromises () {
     if (this.waitingPromises.length === 0) {
       return
     }
     const top = this.waitingPromises[0]
     if (this.finished && top.length !== -1 && this.size < top.offset + top.length) {
+      console.log('flushing')
       for (let p of this.waitingPromises) {
         p.promise.reject({message: 'tried to read past the end'})
       }
@@ -37,6 +33,7 @@ export class VirtualBuffer {
       return
     }
     if (top.length === -1 && this.finished) {
+      console.log('RESOLVING  ', top.offset, top.length)
       this.waitingPromises.shift()
       const returnValue = this.buffer
       this.buffer = new Buffer(0)
@@ -44,10 +41,10 @@ export class VirtualBuffer {
       top.promise.resolve(returnValue)
     } else {
       if (top.length !== -1 && this.size >= top.offset + top.length) {
+        console.log('RESOLVING  ', top.offset, top.length)
         this.waitingPromises.shift()
-        // TODO: not concatenating but keeping a nice list of buffers
         const returnValue = new Buffer(this.buffer.slice(top.offset - this.position, top.length))
-        this.buffer = new Buffer(this.buffer.slice(top.length))
+        this.buffer = new Buffer(top.length)
         this.position = top.offset + top.length
         top.promise.resolve(returnValue)
         this._tryToFlushPromises()
@@ -58,14 +55,19 @@ export class VirtualBuffer {
   // length = -1 means 'until the end'
   readChunk (offset, length) {
     if (offset < this.position) {
-      throw new Error('tried to read backwards asked offset:' + offset + ' current position:' + this.position)
+      throw new Error('tried to read backwards')
     }
-    return new Promise((resolve, reject) => {
-      this.waitingPromises.push({promise: {resolve, reject}, offset, length})
-      this.waitingPromises.sort((e1, e2) => {
-        return e1.offset - e2.offset
-      })
-      this._tryToFlushPromises()
+    let resolveP, rejectP
+    const promise = new Promise(function (resolve, reject) {
+      resolveP = resolve
+      rejectP = reject
     })
+    console.log('adding promise', offset, length)
+    this.waitingPromises.push({promise: {resolve: resolveP, reject: rejectP}, offset, length})
+    this.waitingPromises.sort((e1, e2) => {
+      return e1.offset - e2.offset
+    })
+    this._tryToFlushPromises()
+    return promise
   }
 }
