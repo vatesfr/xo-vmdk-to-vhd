@@ -1,7 +1,7 @@
 'use strict'
 
-import {readFile} from 'fs-promise'
 import zlib from 'zlib'
+import {VirtualBuffer} from './virtual-buffer'
 
 const sectorSize = 512
 const compressionMap = ['COMPRESSION_NONE', 'COMPRESSION_DEFLATE']
@@ -104,8 +104,9 @@ async function readGrain (offsetSectors, buffer, compressed) {
   }
 }
 
-export async function readRawContent (fileName) {
-  const buffer = await readFile(fileName)
+export async function readRawContent (readStream) {
+  const virtualBuffer = new VirtualBuffer(readStream)
+  const buffer = await virtualBuffer.readChunk(0, -1)
   const magicString = buffer.slice(0, 4).toString('ascii')
   if (magicString !== 'KDMV') {
     throw new Error('not a VMDK file')

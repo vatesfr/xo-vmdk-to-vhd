@@ -3,7 +3,7 @@
 import {assert} from 'chai'
 import {describe, it} from 'mocha'
 import {exec} from 'child-process-promise'
-import {readFile} from 'fs-promise'
+import {readFile, createReadStream} from 'fs-promise'
 import {readRawContent} from '../src/vmdk-read'
 import {VHDFile} from '../src/vhd-write'
 
@@ -19,7 +19,7 @@ describe('VMDK to VHD conversion', function () {
         return exec('qemu-img convert -fraw -Ovmdk  -o subformat=streamOptimized ' + inputRawFileName + ' ' + vmdkFileName)
       })
       .then(() => {
-        return Promise.all([readRawContent(vmdkFileName), readFile(inputRawFileName)])
+        return Promise.all([readRawContent(createReadStream(vmdkFileName)), readFile(inputRawFileName)])
       })
       .then((result) => {
         const readRawContent = result[0].rawFile
