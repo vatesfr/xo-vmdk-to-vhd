@@ -8,8 +8,8 @@ import {
   createFooter,
   createDynamicDiskHeader,
   computeChecksum,
-  createExpandedFile,
-  computeGeometryForSize
+  computeGeometryForSize,
+  VHDFile
 } from '../src/vhd-write'
 
 describe('VHD writing', function () {
@@ -30,7 +30,7 @@ describe('VHD writing', function () {
     createDynamicDiskHeader(1, 0x00200000)
     expect('a').to.equal('a')
   })
-  it('createEmptyFile() does not crash', () => {
+  it('writing a known file is successful', () => {
     const fileName = 'output.vhd'
     const rawFilename = 'output.raw'
     const randomFileName = 'random.raw'
@@ -43,7 +43,12 @@ describe('VHD writing', function () {
         return readFile(randomFileName)
       })
       .then((buffer) => {
-        return createExpandedFile(fileName, buffer, 523557791, geometry)
+        const f = new VHDFile(buffer.length, 523557791)
+        const splitPoint = Math.floor(Math.random() * buffer.length)
+        f.writeBuffer(buffer.slice(splitPoint), splitPoint)
+        f.writeBuffer(buffer.slice(0, splitPoint), 0)
+        f.writeBuffer(buffer.slice(splitPoint), splitPoint)
+        return f.writeFile(fileName)
           .then(() => {
             return exec('qemu-img convert -fvpc -Oraw ' + fileName + ' ' + rawFilename)
           })
