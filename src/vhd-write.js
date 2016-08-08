@@ -19,6 +19,73 @@ export function computeChecksum (buffer) {
   return (~sum) >>> 0
 }
 
+class Block {
+  constructor (blockSize) {
+    const bitmapSize = blockSize / sectorSize / 8
+    const bufferSize = Math.ceil((blockSize + bitmapSize) / sectorSize) * sectorSize
+    this.buffer = new Buffer(bufferSize)
+    this.buffer.fill(0)
+    this.bitmapBuffer = this.buffer.slice(0, bitmapSize)
+    this.dataBuffer = this.buffer.slice(bitmapSize)
+    this.bitmapBuffer.fill(0xff)
+  }
+
+  writeData (buffer) {
+    buffer.copy(this.dataBuffer)
+  }
+
+  async writeOnFile (file) {
+    await write(file, this.buffer, 0, this.buffer.length)
+  }
+}
+
+class SparseFile {
+  constructor (dataSize, blockSize, startOffset) {
+    this.table = createEmptyTable(dataSize, blockSize)
+    this.blockSize = blockSize
+    this.startOffset = (startOffset + this.table.buffer.length) / sectorSize
+  }
+
+  get entryCount () {
+    return this.table.entryCount
+  }
+
+  _writeBlock (blockBuffer, tableIndex) {
+    let entry = this.table.entries[tableIndex]
+    if (entry === undefined) {
+      entry = new Block(this.blockSize)
+      this.table.entries[tableIndex] = entry
+    }
+    entry.writeData(blockBuffer)
+  }
+
+  writeBuffer (buffer) {
+    const blockCount = Math.ceil(buffer.length / this.blockSize)
+    for (let i = 0; i < blockCount; i++) {
+      const blockBuffer = buffer.slice(i * this.blockSize, (i + 1) * this.blockSize)
+      this._writeBlock(blockBuffer, i)
+    }
+  }
+
+  async writeOnFile (file) {
+    let currentOffset = this.startOffset
+    for (let i = 0; i < this.table.entryCount; i++) {
+      const block = this.table.entries[i]
+      if (block !== undefined) {
+        this.table.buffer.writeUInt32BE(currentOffset, i * 4)
+        currentOffset += block.buffer.length / sectorSize
+      }
+    }
+    await write(file, this.table.buffer, 0, this.table.buffer.length)
+    for (let i = 0; i < this.table.entryCount; i++) {
+      const block = this.table.entries[i]
+      if (block !== undefined) {
+        await block.writeOnFile(file)
+      }
+    }
+  }
+}
+
 export function computeGeometryForSize (size) {
   let totalSectors = Math.ceil(size / 512)
   let sectorsPerTrack
@@ -103,47 +170,21 @@ export function createDynamicDiskHeader (tableEntries, blockSize) {
 export function createEmptyTable (dataSize, blockSize) {
   const blockCount = Math.ceil(dataSize / blockSize)
   const tableSizeSectors = Math.ceil(blockCount * 4 / sectorSize)
-  const bufferSize = tableSizeSectors * sectorSize
-  const buffer = new Buffer(bufferSize)
+  const buffer = new Buffer(tableSizeSectors * sectorSize)
   buffer.fill(0xff)
-  return {entryCount: blockCount, buffer: buffer}
-}
-
-function createBlock (blockSize, buffer) {
-  const bitmapSize = blockSize / sectorSize / 8
-  const bufferSize = Math.ceil((blockSize + bitmapSize) / sectorSize) * sectorSize
-  const blockBuffer = new Buffer(bufferSize)
-  blockBuffer.fill(0)
-  const bitmapBuffer = blockBuffer.slice(0, bitmapSize)
-  bitmapBuffer.fill(0xff)
-  if (buffer !== null) {
-    buffer.copy(blockBuffer, bitmapSize)
-  }
-  return blockBuffer
+  return {entryCount: blockCount, buffer: buffer, entries: []}
 }
 
 export async function createExpandedFile (fileName, dataBuffer, timestamp, geometry) {
   const dataSize = dataBuffer.length
   const fileFooter = createFooter(dataSize, timestamp, geometry)
   const blockSize = 0x00200000
-  const table = createEmptyTable(dataSize, blockSize)
-  const tableBuffer = table.buffer
-  const diskHeader = createDynamicDiskHeader(table.entryCount, 0x00200000)
-  let currentPosition = (sectorSize * 3 + tableBuffer.length) / sectorSize
-  const blockCount = Math.ceil(dataSize / blockSize)
-  const blocks = []
-  for (let i = 0; i < blockCount; i++) {
-    const block = createBlock(blockSize, dataBuffer.slice(i * blockSize, (i + 1) * blockSize))
-    blocks.push(block)
-    table.buffer.writeUInt32BE(currentPosition, i * 4)
-    currentPosition += block.length / sectorSize
-  }
+  const spareFile = new SparseFile(dataSize, blockSize, sectorSize * 3)
+  const diskHeader = createDynamicDiskHeader(spareFile.entryCount, blockSize)
+  spareFile.writeBuffer(dataBuffer)
   const file = await open(fileName, 'w')
   await write(file, fileFooter, 0, fileFooter.length)
   await write(file, diskHeader, 0, diskHeader.length)
-  await write(file, tableBuffer, 0, tableBuffer.length)
-  for (let i = 0; i < blocks.length; i++) {
-    await write(file, blocks[i], 0, blocks[i].length)
-  }
+  await spareFile.writeOnFile(file)
   await write(file, fileFooter, 0, fileFooter.length)
 }
