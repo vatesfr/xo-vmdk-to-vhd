@@ -30,8 +30,8 @@ class Block {
     this.bitmapBuffer.fill(0xff)
   }
 
-  writeData (buffer) {
-    buffer.copy(this.dataBuffer)
+  writeData (buffer, offset = 0) {
+    buffer.copy(this.dataBuffer, offset)
   }
 
   async writeOnFile (file) {
@@ -39,7 +39,7 @@ class Block {
   }
 }
 
-class SparseFile {
+class SparseExtent {
   constructor (dataSize, blockSize, startOffset) {
     this.table = createEmptyTable(dataSize, blockSize)
     this.blockSize = blockSize
@@ -50,20 +50,32 @@ class SparseFile {
     return this.table.entryCount
   }
 
-  _writeBlock (blockBuffer, tableIndex) {
+  _writeBlock (blockBuffer, tableIndex, offset) {
+    if (blockBuffer.length + offset > this.blockSize) {
+      throw new Error('invalid block geometry')
+    }
     let entry = this.table.entries[tableIndex]
     if (entry === undefined) {
       entry = new Block(this.blockSize)
       this.table.entries[tableIndex] = entry
     }
-    entry.writeData(blockBuffer)
+    entry.writeData(blockBuffer, offset)
   }
 
-  writeBuffer (buffer) {
-    const blockCount = Math.ceil(buffer.length / this.blockSize)
-    for (let i = 0; i < blockCount; i++) {
-      const blockBuffer = buffer.slice(i * this.blockSize, (i + 1) * this.blockSize)
-      this._writeBlock(blockBuffer, i)
+  writeBuffer (buffer, offset = 0) {
+    const startBlock = Math.floor(offset / this.blockSize)
+    const endBlock = Math.ceil((offset + buffer.length) / this.blockSize)
+    for (let i = startBlock; i < endBlock; i++) {
+      const blockDelta = offset - (i * this.blockSize)
+      let blockBuffer, blockOffset
+      if (blockDelta > 0) {
+        blockBuffer = buffer.slice(0, (i + 1) * this.blockSize - offset)
+        blockOffset = blockDelta
+      } else {
+        blockBuffer = buffer.slice(-blockDelta, (i + 1) * this.blockSize - offset)
+        blockOffset = 0
+      }
+      this._writeBlock(blockBuffer, i, blockOffset)
     }
   }
 
@@ -83,6 +95,29 @@ class SparseFile {
         await block.writeOnFile(file)
       }
     }
+  }
+}
+
+export class VHDFile {
+  constructor (virtualSize, timestamp) {
+    this.geomtry = computeGeometryForSize(virtualSize)
+    this.timestamp = timestamp
+    this.blockSize = 0x00200000
+    this.sparseFile = new SparseExtent(this.geomtry.actualSize, this.blockSize, sectorSize * 3)
+  }
+
+  writeBuffer (buffer, offset = 0) {
+    this.sparseFile.writeBuffer(buffer, offset)
+  }
+
+  async writeFile (fileName) {
+    const fileFooter = createFooter(this.geomtry.actualSize, this.timestamp, this.geomtry)
+    const diskHeader = createDynamicDiskHeader(this.sparseFile.entryCount, this.blockSize)
+    const file = await open(fileName, 'w')
+    await write(file, fileFooter, 0, fileFooter.length)
+    await write(file, diskHeader, 0, diskHeader.length)
+    await this.sparseFile.writeOnFile(file)
+    await write(file, fileFooter, 0, fileFooter.length)
   }
 }
 
@@ -175,16 +210,3 @@ export function createEmptyTable (dataSize, blockSize) {
   return {entryCount: blockCount, buffer: buffer, entries: []}
 }
 
-export async function createExpandedFile (fileName, dataBuffer, timestamp, geometry) {
-  const dataSize = dataBuffer.length
-  const fileFooter = createFooter(dataSize, timestamp, geometry)
-  const blockSize = 0x00200000
-  const spareFile = new SparseFile(dataSize, blockSize, sectorSize * 3)
-  const diskHeader = createDynamicDiskHeader(spareFile.entryCount, blockSize)
-  spareFile.writeBuffer(dataBuffer)
-  const file = await open(fileName, 'w')
-  await write(file, fileFooter, 0, fileFooter.length)
-  await write(file, diskHeader, 0, diskHeader.length)
-  await spareFile.writeOnFile(file)
-  await write(file, fileFooter, 0, fileFooter.length)
-}

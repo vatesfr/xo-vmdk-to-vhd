@@ -5,7 +5,7 @@ import {describe, it} from 'mocha'
 import {exec} from 'child-process-promise'
 import {readFile} from 'fs-promise'
 import {readRawContent} from '../src/vmdk-read'
-import {createExpandedFile, computeGeometryForSize} from '../src/vhd-write'
+import {VHDFile} from '../src/vhd-write'
 
 describe('VMDK to VHD conversion', function () {
   it('can convert a random data file', () => {
@@ -23,8 +23,9 @@ describe('VMDK to VHD conversion', function () {
       })
       .then((result) => {
         const readRawContent = result[0].rawFile
-        const geometry = computeGeometryForSize(readRawContent.length)
-        return createExpandedFile(vhdFileName, readRawContent, 523557791, geometry)
+        const f = new VHDFile(readRawContent.length, 523557791)
+        f.writeBuffer(readRawContent)
+        return f.writeFile(vhdFileName)
           .then(() => {
             return exec('qemu-img convert -fvpc -Oraw ' + vhdFileName + ' ' + reconvertedRawFilemane)
           })
