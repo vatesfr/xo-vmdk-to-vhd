@@ -16,7 +16,7 @@ addons:
     - qemu-utils
 install:
   - sudo add-apt-repository "deb http://archive.ubuntu.com/ubuntu/ trusty multiverse" && sudo add-apt-repository "deb http://archive.ubuntu.com/ubuntu/ trusty-updates multiverse"
-  - sudo add-apt-get install virtualbox
+  - sudo apt-get install virtualbox
   - npm install
   - wget https://github.com/rubiojr/vhd-util-convert/archive/master.tar.gz -O /tmp/vhd-util-convert.tar.gz
   - tar -xvf /tmp/vhd-util-convert.tar.gz
