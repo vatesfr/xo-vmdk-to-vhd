@@ -8,7 +8,7 @@ export class VirtualBuffer {
     this.position = 0
     this.finished = false
     this.readStream.on('data', (buffer) => {
-      // TODO: not concatenating and keeping a nice list of buffers
+      // TODO: not concatenating but keeping a nice list of buffers
       this.buffer = Buffer.concat([this.buffer, buffer])
       this._tryToFlushPromises()
       this.size += buffer.length
@@ -18,6 +18,10 @@ export class VirtualBuffer {
       this._tryToFlushPromises()
     })
     this.waitingPromises = []
+  }
+
+  get isDepleted () {
+    return this.finished && this.position == this.size
   }
 
   _tryToFlushPromises () {
@@ -41,7 +45,7 @@ export class VirtualBuffer {
     } else {
       if (top.length !== -1 && this.size >= top.offset + top.length) {
         this.waitingPromises.shift()
-        // TODO: not concatenating and keeping a nice list of buffers
+        // TODO: not concatenating but keeping a nice list of buffers
         const returnValue = new Buffer(this.buffer.slice(top.offset - this.position, top.length))
         this.buffer = new Buffer(this.buffer.slice(top.length))
         this.position = top.offset + top.length
