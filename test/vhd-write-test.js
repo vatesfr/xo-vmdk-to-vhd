@@ -3,12 +3,14 @@
 import {expect, assert} from 'chai'
 import {describe, it} from 'mocha'
 import {readFile} from 'fs-promise'
+import {createWriteStream} from 'fs'
 import {exec} from 'child-process-promise'
 import {
   createFooter,
   createDynamicDiskHeader,
   computeChecksum,
   computeGeometryForSize,
+  ReadableRawVHDStream,
   VHDFile
 } from '../src/vhd-write'
 
@@ -24,11 +26,21 @@ describe('VHD writing', function () {
   })
   it('createFooter() does not crash', () => {
     createFooter(104448, Math.floor(Date.now() / 1000), {cylinders: 3, heads: 4, sectorsPerTrack: 17})
-    expect('a').to.equal('a')
   })
   it('createDynamicDiskHeader() does not crash', () => {
     createDynamicDiskHeader(1, 0x00200000)
-    expect('a').to.equal('a')
+  })
+  it('ReadableRawVHDStream does not crash', () => {
+    const stream = new ReadableRawVHDStream(100000, function* () {
+      yield*[{
+        offset: 100,
+        buffer: new Buffer('azerzaerazeraze', 'ascii')
+      }, {
+        offset: 700,
+        buffer: new Buffer('gdfslkdfguer', 'ascii')
+      }]
+    }())
+    stream.pipe(createWriteStream('outputStream'))
   })
   it('writing a known file is successful', () => {
     const fileName = 'output.vhd'
