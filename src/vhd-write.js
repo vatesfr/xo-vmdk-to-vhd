@@ -212,7 +212,7 @@ export function createEmptyTable (dataSize, blockSize) {
 
 export class ReadableRawVHDStream extends stream.Readable {
   constructor (size, blockGenerator) {
-    super();
+    super()
     this.size = size
     this.footer = createFooter(size, Math.floor(Date.now() / 1000), computeGeometryForSize(size))
     this.position = 0
