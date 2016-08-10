@@ -211,27 +211,25 @@ export function createEmptyTable (dataSize, blockSize) {
 }
 
 export class ReadableRawVHDStream extends stream.Readable {
-  constructor (size, blockGenerator) {
+  constructor (size, vmdkParser) {
     super()
     this.size = size
     this.footer = createFooter(size, Math.floor(Date.now() / 1000), computeGeometryForSize(size))
     this.position = 0
-    this.blockGenerator = blockGenerator
+    this.vmdkParser = vmdkParser
   }
 
-  _read (n) {
-    console.log('_read', n)
-    const next = this.blockGenerator.next()
-    console.log('lol', next)
-    if (next.done) {
+  async _read (n) {
+    const next = await this.vmdkParser.next()
+    if (next !== null) {
       const paddingBuffer = new Buffer(this.size - this.position)
       paddingBuffer.fill(0)
       this.push(paddingBuffer)
       this.push(this.footer)
       this.push(null)
     } else {
-      const offset = next.value.offset
-      const buffer = next.value.buffer
+      const offset = next.lbaBytes
+      const buffer = next.grain
       const paddingBuffer = new Buffer(offset - this.position)
       paddingBuffer.fill(0)
       this.push(paddingBuffer)
