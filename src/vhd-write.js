@@ -1,5 +1,6 @@
 'use strict'
 import {open, write} from 'fs-promise'
+import stream from 'stream'
 
 const footerCookie = 'conectix'
 const creatorApp = 'xo  '
@@ -111,7 +112,7 @@ export class VHDFile {
   }
 
   async writeFile (fileName) {
-    const fileFooter = createFooter(this.geomtry.actualSize, this.timestamp, this.geomtry)
+    const fileFooter = createFooter(this.geomtry.actualSize, this.timestamp, this.geomtry, 512, 0)
     const diskHeader = createDynamicDiskHeader(this.sparseFile.entryCount, this.blockSize)
     const file = await open(fileName, 'w')
     await write(file, fileFooter, 0, fileFooter.length)
@@ -157,15 +158,14 @@ export function computeGeometryForSize (size) {
   return {cylinders, heads, sectorsPerTrack, actualSize}
 }
 
-export function createFooter (size, timestamp, geometry) {
+export function createFooter (size, timestamp, geometry, dataOffsetLow = 0xFFFFFFFF, dataOffsetHigh = 0xFFFFFFFF) {
   let view = new Uint8Array(512)
   let footer = new Buffer(view.buffer)
   view.set(new Buffer(footerCookie, 'ascii'), 0)
   footer.writeUInt32BE(2, 8)
   footer.writeUInt32BE(0x00010000, 12)
-  // hard code the position of the next structure, we have no reason to change it
-  footer.writeUInt32BE(0, 16)
-  footer.writeUInt32BE(512, 20)
+  footer.writeUInt32BE(dataOffsetHigh, 16)
+  footer.writeUInt32BE(dataOffsetLow, 20)
   footer.writeUInt32BE(timestamp, 24)
   view.set(new Buffer(creatorApp, 'ascii'), 28)
   view.set(new Buffer(osString, 'ascii'), 36)
@@ -210,3 +210,33 @@ export function createEmptyTable (dataSize, blockSize) {
   return {entryCount: blockCount, buffer: buffer, entries: []}
 }
 
+export class ReadableRawVHDStream extends stream.Readable {
+  constructor (size, blockGenerator) {
+    super();
+    this.size = size
+    this.footer = createFooter(size, Math.floor(Date.now() / 1000), computeGeometryForSize(size))
+    this.position = 0
+    this.blockGenerator = blockGenerator
+  }
+
+  _read (n) {
+    console.log('_read', n)
+    const next = this.blockGenerator.next()
+    console.log('lol', next)
+    if (next.done) {
+      const paddingBuffer = new Buffer(this.size - this.position)
+      paddingBuffer.fill(0)
+      this.push(paddingBuffer)
+      this.push(this.footer)
+      this.push(null)
+    } else {
+      const offset = next.value.offset
+      const buffer = next.value.buffer
+      const paddingBuffer = new Buffer(offset - this.position)
+      paddingBuffer.fill(0)
+      this.push(paddingBuffer)
+      this.push(buffer)
+      this.position = offset + buffer.length
+    }
+  }
+}
