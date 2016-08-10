@@ -21,7 +21,7 @@ export class VirtualBuffer {
   }
 
   get isDepleted () {
-    return this.finished && this.position == this.size
+    return this.finished && this.position === this.size
   }
 
   _tryToFlushPromises () {
