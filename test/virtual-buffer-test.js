@@ -14,6 +14,6 @@ describe('Virtual Buffer', function () {
     const array = await Promise.all([readFile(rawFileName), buffer.readChunk(0, 10), buffer.readChunk(10, -1)])
     const original = array.shift()
     assert.equal(Buffer.concat(array).toString('ascii'), original.toString('ascii'))
-    assert(buffer.isDepleted, 'virtual buffer is depleted');
+    assert(buffer.isDepleted, 'virtual buffer is depleted')
   })
 })
