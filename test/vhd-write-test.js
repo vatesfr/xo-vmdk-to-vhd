@@ -31,15 +31,15 @@ describe('VHD writing', function () {
     createDynamicDiskHeader(1, 0x00200000)
   })
   it('ReadableRawVHDStream does not crash', () => {
-    const stream = new ReadableRawVHDStream(100000, function* () {
-      yield*[{
+    const stream = new ReadableRawVHDStream(100000, (function * () {
+      yield * [{
         offset: 100,
         buffer: new Buffer('azerzaerazeraze', 'ascii')
       }, {
         offset: 700,
         buffer: new Buffer('gdfslkdfguer', 'ascii')
       }]
-    }())
+    })())
     stream.pipe(createWriteStream('outputStream'))
   })
   it('writing a known file is successful', () => {
