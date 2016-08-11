@@ -1,12 +1,14 @@
 'use strict'
 import {open, write} from 'fs-promise'
 import stream from 'stream'
+import {VMDKDirectParser} from './vmdk-read'
 
 const footerCookie = 'conectix'
 const creatorApp = 'xo  '
 // it looks like every body is using Wi2k
 const osString = 'Wi2k'
 const headerCookie = 'cxsparse'
+const fixedHardDiskType = 2
 const dynamicHardDiskType = 3
 
 const sectorSize = 512
@@ -112,7 +114,7 @@ export class VHDFile {
   }
 
   async writeFile (fileName) {
-    const fileFooter = createFooter(this.geomtry.actualSize, this.timestamp, this.geomtry, 512, 0)
+    const fileFooter = createFooter(this.geomtry.actualSize, this.timestamp, this.geomtry, dynamicHardDiskType, 512, 0)
     const diskHeader = createDynamicDiskHeader(this.sparseFile.entryCount, this.blockSize)
     const file = await open(fileName, 'w')
     await write(file, fileFooter, 0, fileFooter.length)
@@ -158,7 +160,7 @@ export function computeGeometryForSize (size) {
   return {cylinders, heads, sectorsPerTrack, actualSize}
 }
 
-export function createFooter (size, timestamp, geometry, dataOffsetLow = 0xFFFFFFFF, dataOffsetHigh = 0xFFFFFFFF) {
+export function createFooter (size, timestamp, geometry, diskType, dataOffsetLow = 0xFFFFFFFF, dataOffsetHigh = 0xFFFFFFFF) {
   let view = new Uint8Array(512)
   let footer = new Buffer(view.buffer)
   view.set(new Buffer(footerCookie, 'ascii'), 0)
@@ -178,7 +180,7 @@ export function createFooter (size, timestamp, geometry, dataOffsetLow = 0xFFFFF
   footer.writeUInt16BE(geometry['cylinders'], 56)
   footer.writeUInt8(geometry['heads'], 58)
   footer.writeUInt8(geometry['sectorsPerTrack'], 59)
-  footer.writeUInt32BE(dynamicHardDiskType, 60)
+  footer.writeUInt32BE(diskType, 60)
   let checksum = computeChecksum(footer)
   footer.writeUInt32BE(checksum, 64)
   return footer
@@ -214,14 +216,14 @@ export class ReadableRawVHDStream extends stream.Readable {
   constructor (size, vmdkParser) {
     super()
     this.size = size
-    this.footer = createFooter(size, Math.floor(Date.now() / 1000), computeGeometryForSize(size))
+    this.footer = createFooter(size, Math.floor(Date.now() / 1000), computeGeometryForSize(size), fixedHardDiskType)
     this.position = 0
     this.vmdkParser = vmdkParser
   }
 
-  async _read (n) {
+  async _read () {
     const next = await this.vmdkParser.next()
-    if (next !== null) {
+    if (next === null) {
       const paddingBuffer = new Buffer(this.size - this.position)
       paddingBuffer.fill(0)
       this.push(paddingBuffer)
@@ -230,11 +232,20 @@ export class ReadableRawVHDStream extends stream.Readable {
     } else {
       const offset = next.lbaBytes
       const buffer = next.grain
+
       const paddingBuffer = new Buffer(offset - this.position)
       paddingBuffer.fill(0)
-      this.push(paddingBuffer)
+      if (paddingBuffer.length !== 0) {
+        this.push(paddingBuffer)
+      }
       this.push(buffer)
       this.position = offset + buffer.length
     }
   }
+}
+
+export async function convertFromVMDK (vmdkReadStream) {
+  const parser = new VMDKDirectParser(vmdkReadStream)
+  const header = await parser.readHeader()
+  return new ReadableRawVHDStream(header.capacitySectors * 512, parser)
 }
