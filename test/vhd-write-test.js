@@ -30,7 +30,7 @@ describe('VHD writing', function () {
   it('createDynamicDiskHeader() does not crash', () => {
     createDynamicDiskHeader(1, 0x00200000)
   })
-  it('ReadableRawVHDStream does not crash', () => {
+  it('ReadableRawVHDStream does not crash', async () => {
     const data = [{
       lbaBytes: 100,
       grain: new Buffer('azerzaerazeraze', 'ascii')
@@ -53,41 +53,33 @@ describe('VHD writing', function () {
       }
     }
     const stream = new ReadableRawVHDStream(100000, mockParser)
-    return stream.pipe(createWriteStream('outputStream'))
+    const pipe = stream.pipe(createWriteStream('outputStream'))
+    await new Promise((resolve, reject) => {
+      pipe.on('finish', resolve)
+      pipe.on('error', reject)
+    })
   })
-  it('writing a known file is successful', () => {
+  it('writing a known file is successful', async () => {
     const fileName = 'output.vhd'
     const rawFilename = 'output.raw'
     const randomFileName = 'random.raw'
     const geometry = computeGeometryForSize(1024 * 1024 * 8)
     const dataSize = geometry.actualSize
-    const buffer = new Buffer(dataSize)
-    buffer.fill(7)
-    return exec('base64 /dev/urandom | head -c ' + dataSize + ' > ' + randomFileName)
-      .then(() => {
-        return readFile(randomFileName)
-      })
-      .then((buffer) => {
-        const f = new VHDFile(buffer.length, 523557791)
-        const splitPoint = Math.floor(Math.random() * buffer.length)
-        f.writeBuffer(buffer.slice(splitPoint), splitPoint)
-        f.writeBuffer(buffer.slice(0, splitPoint), 0)
-        f.writeBuffer(buffer.slice(splitPoint), splitPoint)
-        return f.writeFile(fileName)
-          .then(() => {
-            return exec('qemu-img convert -fvpc -Oraw ' + fileName + ' ' + rawFilename)
-          })
-          .then(() => {
-            return readFile(rawFilename)
-          })
-          .then((fileContent) => {
-            expect(fileContent.length).to.equal(dataSize)
-            for (let i = 0; i < fileContent.length; i++) {
-              if (fileContent[i] !== buffer[i]) {
-                assert.fail(fileContent[i], 0)
-              }
-            }
-          })
-      })
+    await exec('base64 /dev/urandom | head -c ' + dataSize + ' > ' + randomFileName)
+    const buffer = await readFile(randomFileName)
+    const f = new VHDFile(buffer.length, 523557791)
+    const splitPoint = Math.floor(Math.random() * buffer.length)
+    f.writeBuffer(buffer.slice(splitPoint), splitPoint)
+    f.writeBuffer(buffer.slice(0, splitPoint), 0)
+    f.writeBuffer(buffer.slice(splitPoint), splitPoint)
+    await f.writeFile(fileName)
+    await exec('qemu-img convert -fvpc -Oraw ' + fileName + ' ' + rawFilename)
+    const fileContent = await readFile(rawFilename)
+    expect(fileContent.length).to.equal(dataSize)
+    for (let i = 0; i < fileContent.length; i++) {
+      if (fileContent[i] !== buffer[i]) {
+        assert.fail(fileContent[i], 0)
+      }
+    }
   })
 })
