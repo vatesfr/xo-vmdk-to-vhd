@@ -1,13 +1,13 @@
 'use strict'
 
-import {expect} from 'chai'
+import {assert} from 'chai'
 import {describe, it} from 'mocha'
 import {exec} from 'child-process-promise'
 import {createReadStream} from 'fs-promise'
 import {VMDKDirectParser} from '../src/vmdk-read'
 
 describe('VMDK reading', function () {
-  it('VMDKDirectParser does not crash', async () => {
+  it('VMDKDirectParser reads OK', async () => {
     let rawFileName = 'random-data'
     let fileName = 'random-data.vmdk'
     await exec('base64 /dev/urandom | head -c 104448 > ' + rawFileName)
@@ -25,8 +25,8 @@ describe('VMDK reading', function () {
       }
       harvested.push(res)
     }
-    expect(harvested.length).to.equal(2)
-    expect(harvested[0].lba).to.equal(0)
-    expect(harvested[1].lba).to.equal(header['grainSizeSectors'])
+    assert.equal(harvested.length, 2)
+    assert.equal(harvested[0].lba, 0)
+    assert.equal(harvested[1].lba, header['grainSizeSectors'])
   }).timeout(10000)
 })

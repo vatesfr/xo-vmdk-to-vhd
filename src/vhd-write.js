@@ -5,7 +5,7 @@ import {VMDKDirectParser} from './vmdk-read'
 
 const footerCookie = 'conectix'
 const creatorApp = 'xo  '
-// it looks like every body is using Wi2k
+// it looks like everybody is using Wi2k
 const osString = 'Wi2k'
 const headerCookie = 'cxsparse'
 const fixedHardDiskType = 2
