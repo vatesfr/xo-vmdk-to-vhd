@@ -33,13 +33,12 @@ describe('VHD writing', function () {
   it('ReadableRawVHDStream does not crash', () => {
     const data = [{
       lbaBytes: 100,
-      buffer: new Buffer('azerzaerazeraze', 'ascii')
+      grain: new Buffer('azerzaerazeraze', 'ascii')
     }, {
       offset: 700,
-      buffer: new Buffer('gdfslkdfguer', 'ascii')
+      grain: new Buffer('gdfslkdfguer', 'ascii')
     }]
     let index = 0
-
     const mockParser = {
       next: async () => {
         if (index < data.length) {
@@ -53,9 +52,8 @@ describe('VHD writing', function () {
         }
       }
     }
-
     const stream = new ReadableRawVHDStream(100000, mockParser)
-    stream.pipe(createWriteStream('outputStream'))
+    return stream.pipe(createWriteStream('outputStream'))
   })
   it('writing a known file is successful', () => {
     const fileName = 'output.vhd'

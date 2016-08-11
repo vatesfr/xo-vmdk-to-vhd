@@ -72,6 +72,7 @@ function parseHeader (buffer) {
   const descriptorOffsetSectors = parseU64b(buffer, 28, 'descriptorOffsetSectors')
   const descriptorSizeSectors = parseU64b(buffer, 36, 'descriptorSizeSectors')
   const numGTEsPerGT = buffer.readUInt32LE(44)
+  const rGrainDirectoryOffsetSectors = parseS64b(buffer, 48, 'rGrainDirectoryOffsetSectors')
   const grainDirectoryOffsetSectors = parseS64b(buffer, 56, 'grainDirectoryOffsetSectors')
   const overHeadSectors = parseS64b(buffer, 64, 'overHeadSectors')
   const compressionMethod = compressionMap[buffer.readUInt16LE(77)]
@@ -79,11 +80,13 @@ function parseHeader (buffer) {
   return {
     flags,
     compressionMethod,
+    grainSizeSectors,
     overHeadSectors,
     capacitySectors,
     descriptorOffsetSectors,
     descriptorSizeSectors,
     grainDirectoryOffsetSectors,
+    rGrainDirectoryOffsetSectors,
     l1EntrySectors,
     numGTEsPerGT
   }
@@ -93,10 +96,12 @@ async function readGrain (offsetSectors, buffer, compressed) {
   const size = buffer.readUInt32LE(offset + 8)
   const grainBuffer = buffer.slice(offset + 12, offset + 12 + size)
   const grainContent = compressed ? await zlib.inflateSync(grainBuffer) : grainBuffer
+  const lba = parseU64b(buffer, offset, 'l2Lba')
   return {
     offsetSectors: offsetSectors,
     offset,
-    lba: parseU64b(buffer, offset, 'l2Lba'),
+    lba,
+    lbaBytes: lba * sectorSize,
     size,
     buffer: grainBuffer,
     grain: grainContent,
@@ -104,23 +109,82 @@ async function readGrain (offsetSectors, buffer, compressed) {
   }
 }
 
+function tryToParseMarker (buffer) {
+  const value = buffer.readUInt32LE(0)
+  const size = buffer.readUInt32LE(8)
+  const type = buffer.readUInt32LE(12)
+  return {value, size, type}
+}
+
+export class VMDKDirectParser {
+  constructor (readStream) {
+    this.virtualBuffer = new VirtualBuffer(readStream)
+  }
+
+  async readHeader () {
+    const headerBuffer = await this.virtualBuffer.readChunk(0, 512)
+    const magicString = headerBuffer.slice(0, 4).toString('ascii')
+    if (magicString !== 'KDMV') {
+      throw new Error('not a VMDK file')
+    }
+    const version = headerBuffer.readUInt32LE(4)
+    if (version !== 1 && version !== 3) {
+      throw new Error('unsupported VMDK version ' + version + ', only version 1 and 3 are supported')
+    }
+    this.header = parseHeader(headerBuffer)
+    // I think the multiplications are OK, because the descriptor is always at the beginning of the file
+    const descriptorStart = this.header.descriptorOffsetSectors * sectorSize
+    const descriptorLength = this.header.descriptorSizeSectors * sectorSize
+    const descriptorBuffer = await this.virtualBuffer.readChunk(descriptorStart, descriptorLength)
+    this.descriptor = parseDescriptor(descriptorBuffer)
+    return this.header
+  }
+
+  async next () {
+    while (!this.virtualBuffer.isDepleted) {
+      const sector = await this.virtualBuffer.readChunk(this.virtualBuffer.position, 512)
+      const marker = tryToParseMarker(sector)
+      if (marker.size === 0) {
+        if (marker.value !== 0) {
+          await this.virtualBuffer.readChunk(this.virtualBuffer.position, marker.value * sectorSize)
+        }
+      } else if (marker.size > 10) {
+        const grainDiskSize = marker.size + 12
+        const alignedGrainDiskSize = Math.ceil(grainDiskSize / sectorSize) * sectorSize
+        const remainOfBufferSize = alignedGrainDiskSize - sectorSize
+        const remainderOfGrainBuffer = await this.virtualBuffer.readChunk(this.virtualBuffer.position, remainOfBufferSize)
+        const grainBuffer = Buffer.concat([sector, remainderOfGrainBuffer])
+        return readGrain(0, grainBuffer, true)
+      }
+    }
+    return new Promise((resolve) => resolve(null))
+  }
+}
+
 export async function readRawContent (readStream) {
   const virtualBuffer = new VirtualBuffer(readStream)
-  const buffer = await virtualBuffer.readChunk(0, -1)
-  const magicString = buffer.slice(0, 4).toString('ascii')
+  const headerBuffer = await virtualBuffer.readChunk(0, 512)
+  const magicString = headerBuffer.slice(0, 4).toString('ascii')
   if (magicString !== 'KDMV') {
     throw new Error('not a VMDK file')
   }
-  const version = buffer.readUInt32LE(4)
+  const version = headerBuffer.readUInt32LE(4)
   if (version !== 1 && version !== 3) {
     throw new Error('unsupported VMDK version ' + version + ', only version 1 and 3 are supported')
   }
-  let header = parseHeader(buffer)
+
+  let header = parseHeader(headerBuffer)
+
   // I think the multiplications are OK, because the descriptor is always at the beginning of the file
-  const descriptorEnd = (header.descriptorOffsetSectors + header.descriptorSizeSectors) * sectorSize
-  const descriptorBuffer = buffer.slice(header.descriptorOffsetSectors * sectorSize, descriptorEnd)
+  const descriptorStart = header.descriptorOffsetSectors * sectorSize
+  const descriptorLength = header.descriptorSizeSectors * sectorSize
+  const descriptorEnd = descriptorStart + descriptorLength
+  const descriptorBuffer = await virtualBuffer.readChunk(descriptorStart, descriptorLength)
   const descriptor = parseDescriptor(descriptorBuffer)
 
+  // TODO: we concat them back for now so that indices match, well have to introduce a bias later
+  const remainingBuffer = await virtualBuffer.readChunk(descriptorEnd, -1)
+  const buffer = Buffer.concat([headerBuffer, descriptorBuffer, remainingBuffer])
   if (header.grainDirectoryOffsetSectors === -1) {
     header = parseHeader(buffer.slice(-1024, -1024 + sectorSize))
   }
@@ -136,7 +200,7 @@ export async function readRawContent (readStream) {
       const l2 = []
       for (let j = 0; j < l2Size; j++) {
         const l2Entry = buffer.readUInt32LE(l1Entry * sectorSize + 4 * j)
-        if (l2Entry !== 0) {
+        if (l2Entry !== 0 && l2Entry !== 1) {
           const grain = await readGrain(l2Entry, buffer, header['flags']['compressedGrains'])
           for (let k = 0; k < grain.grain.byteLength; k++) {
             rawOutputBuffer[grain.lba * sectorSize + k] = grain.grain[k]
