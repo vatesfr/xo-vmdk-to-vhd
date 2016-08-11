@@ -11,7 +11,7 @@ describe('VMDK to VHD conversion', function () {
   it('can convert a random data file with readRawContent()', async () => {
     let inputRawFileName = 'random-data.raw'
     let vmdkFileName = 'random-data.vmdk'
-    let vhdFileName = 'from-vmdk.vhd'
+    let vhdFileName = 'from-vmdk-readRawContent.vhd'
     let reconvertedRawFilemane = 'from-vhd.raw'
     let dataSize = 5222400
     await exec('rm -f ' + [inputRawFileName, vmdkFileName, vhdFileName, reconvertedRawFilemane].join(' '))
@@ -33,7 +33,7 @@ describe('VMDK to VHD conversion', function () {
   it('can convert a random data file with VMDKDirectParser', async () => {
     let inputRawFileName = 'random-data.raw'
     let vmdkFileName = 'random-data.vmdk'
-    let vhdFileName = 'from-vmdk.vhd'
+    let vhdFileName = 'from-vmdk-VMDKDirectParser.vhd'
     let reconvertedRawFilemane = 'from-vhd.raw'
     let reconvertedByVBoxRawFilemane = 'from-vhd-by-vbox.raw'
     let dataSize = 5222400

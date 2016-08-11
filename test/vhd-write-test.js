@@ -1,6 +1,6 @@
 'use strict'
 
-import {expect, assert} from 'chai'
+import {assert} from 'chai'
 import {describe, it} from 'mocha'
 import {readFile} from 'fs-promise'
 import {createWriteStream} from 'fs'
@@ -21,8 +21,8 @@ describe('VHD writing', function () {
     const expectedChecksum1 = 0xFFFFEFB2
     const testValue2 = '6378737061727365FFFFFFFFFFFFFFFF0000000000000600000100000000000100200000'
     const expectedChecksum2 = 0xFFFFF476
-    expect(computeChecksum(new Buffer(testValue1, 'hex'))).to.equal(expectedChecksum1)
-    expect(computeChecksum(new Buffer(testValue2, 'hex'))).to.equal(expectedChecksum2)
+    assert.equal(computeChecksum(new Buffer(testValue1, 'hex')), expectedChecksum1)
+    assert.equal(computeChecksum(new Buffer(testValue2, 'hex')), expectedChecksum2)
   })
   it('createFooter() does not crash', () => {
     createFooter(104448, Math.floor(Date.now() / 1000), {cylinders: 3, heads: 4, sectorsPerTrack: 17})
@@ -75,7 +75,7 @@ describe('VHD writing', function () {
     await f.writeFile(fileName)
     await exec('qemu-img convert -fvpc -Oraw ' + fileName + ' ' + rawFilename)
     const fileContent = await readFile(rawFilename)
-    expect(fileContent.length).to.equal(dataSize)
+    assert.equal(fileContent.length, dataSize)
     for (let i = 0; i < fileContent.length; i++) {
       if (fileContent[i] !== buffer[i]) {
         assert.fail(fileContent[i], 0)
