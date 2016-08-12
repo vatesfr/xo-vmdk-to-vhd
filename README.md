@@ -19,3 +19,19 @@ const pipe = (await convertFromVMDK(fs.createReadStream(vmdkFileName))).pipe(fs.
       pipe.on('error', reject)
     })
 ```
+
+or:
+
+```
+var converter =  require('xo-vmdk-to-vhd').default;
+
+var fs = require('fs-promise')
+var p = converter(fs.createReadStream(vmdkFileName));
+p.then(function(stream) {
+    var pipe = stream.pipe(fs.createWriteStream(vhdFileName));
+    return new Promise(function(resolve, reject) {
+        pipe.on('finish', resolve)
+      	pipe.on('error', reject)
+    });
+});
+```
