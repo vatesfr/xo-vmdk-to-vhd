@@ -1,3 +1,3 @@
 'use strict'
-
-module.exports = {default: require('lib/vhd-write').convertFromVMDK}
+require('babel-polyfill')
+module.exports = {default: require('./lib/vhd-write').convertFromVMDK}
